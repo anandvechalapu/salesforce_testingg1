@@ -1,0 +1,133 @@
+<template>
+    <lightning-card title="Survey Feedback" icon-name="standard:feedback">
+        <div class="slds-p-around_medium slds-align_absolute-center">
+            <template if:true={questions.length}>
+                <template for:each={questions} for:item="question">
+                    <div class="slds-p-around_medium">
+                        <lightning-input 
+                            label={question.name} 
+                            field-name={question.Id} 
+                            type={getQuestionType(question.type)}
+                        >
+                        {getQuestionOptions(question.choices)}
+                        </lightning-input>
+                    </div>
+                </template>
+
+                <div class="slds-p-around_medium">
+                    <lightning-button
+                        label="Submit"
+                        variant="brand"
+                        title="Submit"
+                        onclick={handleSubmit}
+                    >
+                    </lightning-button>
+                </div>
+            </template>
+            <template if:true={!questions.length}>
+                <p>No questions found.</p>
+            </template>
+        </div>
+    </lightning-card>
+</template>
+
+<script>
+import { LightningElement,track } from 'lwc';
+import surveyQuestion from '@salesforce/apex/SurveyController.getSurveyQuestions';
+import surveyQuestionChoices from '@salesforce/apex/SurveyController.getSurveyQuestionChoices';
+import saveSurveyResponse from '@salesforce/apex/SurveyController.saveSurveyResponse';
+import {ShowToastEvent} from 'lightning/platformShowToastEvent';
+
+export default class SurveyFeedback extends LightningElement {
+    @track questions;
+    @track choices;
+
+    connectedCallback(){
+        this.getSurveyQuestions();
+    }
+
+    getSurveyQuestions(){
+        surveyQuestion()
+        .then(result => {
+            this.questions = result;
+            this.getSurveyQuestionChoices();
+        })
+        .catch(error => {
+            // eslint-disable-next-line no-console
+            console.log(error);
+        })
+    }
+
+    getSurveyQuestionChoices(){
+        surveyQuestionChoices()
+        .then(result => {
+            this.choices = result;
+            // eslint-disable-next-line no-console
+            console.log(this.choices);
+        })
+        .catch(error => {
+            // eslint-disable-next-line no-console
+            console.log(error);
+        })
+    }
+
+    getQuestionType(type){
+        if(type === 'text'){
+            return 'text';
+        } else if(type === 'singleChoice' || type === 'multiChoice'){
+            return 'select';
+        } else if(type === 'rating'){
+            return 'number';
+        }
+    }
+
+    getQuestionOptions(choice){
+        if(choice){ 
+            let options = [];
+            choice.forEach(function(choice){
+                options.push({
+                    label: choice.label,
+                    value: choice.value
+                });
+            });
+            return options;
+        }
+    }
+
+    handleSubmit(){
+        let response = {
+            surveyId : this.questions[0].surveyId, 
+            answers : []
+        };
+        this.questions.forEach(function(question){
+            response.answers.push({
+                questionId : question.Id, 
+                answer : this.template.querySelector(`[data-id="${question.Id}"]`).value
+            });
+        }, this);
+
+        saveSurveyResponse({
+            response : response
+        })
+        .then(result => {
+            this.dispatchEvent(
+                new ShowToastEvent({
+                    title : 'Success',
+                    message : 'Response submitted Successfully',
+                    variant : 'success'
+                })
+            );
+        })
+        .catch(error => {
+            // eslint-disable-next-line no-console
+            console.log(error);
+        })
+    }
+}
+</script>
+
+<style>
+.slds-align_absolute-center {
+    position: absolute;
+    top: 50%;
+    left: 50
